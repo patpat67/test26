@@ -230,6 +230,7 @@
         let shootingStars = [];
         let gameStarted = false;
         let completed = false;
+        let currentStarIndex = 0;
 
         // Heart constellation points (will be scaled to screen)
         const heartShape = [
@@ -248,11 +249,8 @@
         function resize() {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
-            initStars();
-        }
 
-        function initStars() {
-            // Background stars
+            // Regenerate background stars
             backgroundStars = [];
             for (let i = 0; i < 300; i++) {
                 backgroundStars.push({
@@ -264,14 +262,30 @@
                 });
             }
 
+            // Update constellation star positions (preserve state)
+            if (constellationStars.length === 0) {
+                initStars();
+            } else {
+                // Just update positions, keep connected state
+                constellationStars.forEach((star, index) => {
+                    star.x = heartShape[index].x * width;
+                    star.y = heartShape[index].y * height;
+                });
+            }
+        }
+
+        function initStars() {
+            currentStarIndex = 0;
+            connectedStars = [];
+
             // Constellation stars (heart shape)
             constellationStars = heartShape.map((point, index) => ({
                 x: point.x * width,
                 y: point.y * height,
-                size: 4,
-                glowSize: 20,
+                size: 5,
+                glowSize: 35,
                 index: index,
-                active: index === 0, // Only first star is active initially
+                active: index === 0,
                 connected: false,
                 pulseOffset: Math.random() * Math.PI * 2
             }));
@@ -308,13 +322,13 @@
                     ctx.fill();
                 } else if (star.active) {
                     // Active star - pulsing glow to indicate clickable
-                    const pulse = Math.sin(time * 0.003 + star.pulseOffset) * 0.5 + 0.5;
-                    const glowRadius = star.glowSize + pulse * 15;
+                    const pulse = Math.sin(time * 0.004 + star.pulseOffset) * 0.5 + 0.5;
+                    const glowRadius = 40 + pulse * 20;
 
                     const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, glowRadius);
                     gradient.addColorStop(0, 'rgba(255, 223, 186, 1)');
-                    gradient.addColorStop(0.3, 'rgba(255, 200, 150, 0.8)');
-                    gradient.addColorStop(0.6, 'rgba(255, 150, 100, 0.3)');
+                    gradient.addColorStop(0.2, 'rgba(255, 200, 150, 0.9)');
+                    gradient.addColorStop(0.5, 'rgba(255, 150, 100, 0.4)');
                     gradient.addColorStop(1, 'rgba(255, 100, 50, 0)');
                     ctx.beginPath();
                     ctx.arc(star.x, star.y, glowRadius, 0, Math.PI * 2);
@@ -322,7 +336,7 @@
                     ctx.fill();
 
                     ctx.beginPath();
-                    ctx.arc(star.x, star.y, star.size + pulse * 2, 0, Math.PI * 2);
+                    ctx.arc(star.x, star.y, star.size + pulse * 3, 0, Math.PI * 2);
                     ctx.fillStyle = '#fffaf0';
                     ctx.fill();
                 }
@@ -418,38 +432,43 @@
         function handleClick(e) {
             if (!gameStarted || completed) return;
 
+            e.preventDefault();
             const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
 
-            constellationStars.forEach(star => {
-                if (!star.active || star.connected) return;
+            // Support both mouse and touch
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const clickX = clientX - rect.left;
+            const clickY = clientY - rect.top;
 
-                const distance = Math.sqrt(
-                    Math.pow(clickX - star.x, 2) + Math.pow(clickY - star.y, 2)
-                );
+            // Get the current active star
+            const activeStar = constellationStars[currentStarIndex];
+            if (!activeStar || activeStar.connected) return;
 
-                if (distance < star.glowSize + 10) {
-                    star.connected = true;
-                    connectedStars.push(star);
+            const distance = Math.sqrt(
+                Math.pow(clickX - activeStar.x, 2) + Math.pow(clickY - activeStar.y, 2)
+            );
 
-                    // Activate next star
-                    const nextIndex = (star.index + 1) % constellationStars.length;
-                    if (nextIndex !== 0 || connectedStars.length === constellationStars.length - 1) {
-                        const nextStar = constellationStars.find(s => s.index === nextIndex);
-                        if (nextStar && !nextStar.connected) {
-                            nextStar.active = true;
-                        }
-                    }
+            // Larger click area (50 pixels)
+            if (distance < 50) {
+                activeStar.connected = true;
+                activeStar.active = false;
+                connectedStars.push(activeStar);
 
-                    updateProgress();
+                // Move to next star
+                currentStarIndex++;
 
-                    // Check if complete
-                    if (connectedStars.length === constellationStars.length) {
-                        completeConstellation();
-                    }
+                if (currentStarIndex < constellationStars.length) {
+                    constellationStars[currentStarIndex].active = true;
                 }
-            });
+
+                updateProgress();
+
+                // Check if complete
+                if (connectedStars.length === constellationStars.length) {
+                    completeConstellation();
+                }
+            }
         }
 
         function updateProgress() {
@@ -507,6 +526,7 @@
         // Initialize
         window.addEventListener('resize', resize);
         canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('touchstart', handleClick);
         resize();
         animate(0);
     </script>
